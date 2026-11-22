@@ -1,10 +1,18 @@
 import React, { useMemo, useState } from 'react';
-import { WaterBaseType, WaterRecipe, EspressoShot } from '../types/espresso';
+import {
+  WaterBaseType,
+  WaterRecipe,
+  WaterConcentrateBatches,
+  EspressoShot,
+} from '../types/espresso';
 import {
   BASE_WATER_MINERALS,
   calculateWaterChemistry,
+  ConcentrateStorageStatus,
   DEFAULT_BUFFER_CONCENTRATE,
   DEFAULT_MAGNESIUM_CONCENTRATE,
+  getConcentrateStorageStatus,
+  getTodayLocalDateInput,
   stepAdjustNumber,
 } from '../utils/coffeeCalculations';
 import { NumericInput } from './NumericInput';
@@ -20,12 +28,18 @@ import {
   Copy,
   Coffee,
   X,
+  Calendar,
+  ShieldAlert,
+  ShieldCheck,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface WaterRecipesViewProps {
   waterRecipes: WaterRecipe[];
   shots: EspressoShot[];
   activeWaterRecipeId: string;
+  concentrateBatches: WaterConcentrateBatches;
+  onUpdateConcentrateBatches: (batches: WaterConcentrateBatches) => void;
   onSetActiveWaterRecipe: (id: string) => void;
   onSaveWaterRecipe: (recipe: WaterRecipe) => void;
   onDeleteWaterRecipe: (id: string) => void;
@@ -46,6 +60,8 @@ export const WaterRecipesView: React.FC<WaterRecipesViewProps> = ({
   waterRecipes,
   shots,
   activeWaterRecipeId,
+  concentrateBatches,
+  onUpdateConcentrateBatches,
   onSetActiveWaterRecipe,
   onSaveWaterRecipe,
   onDeleteWaterRecipe,
@@ -53,6 +69,30 @@ export const WaterRecipesView: React.FC<WaterRecipesViewProps> = ({
 }) => {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingRecipe, setEditingRecipe] = useState<WaterRecipe | null>(null);
+
+  const todayDateStr = getTodayLocalDateInput();
+  const mgStorage = getConcentrateStorageStatus(concentrateBatches.magnesiumPreparedDate);
+  const bufStorage = getConcentrateStorageStatus(concentrateBatches.bufferPreparedDate);
+
+  const getStorageBadgeClasses = (level: ConcentrateStorageStatus['level']) => {
+    switch (level) {
+      case 'safe':
+        return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+      case 'caution':
+        return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
+      case 'replace':
+        return 'bg-rose-500/15 text-rose-300 border-rose-500/30';
+      default:
+        return 'bg-slate-800/80 text-slate-400 border-slate-700';
+    }
+  };
+
+  const renderStorageIcon = (level: ConcentrateStorageStatus['level']) => {
+    if (level === 'safe') return <ShieldCheck className="w-3 h-3 shrink-0" />;
+    if (level === 'caution') return <AlertTriangle className="w-3 h-3 shrink-0" />;
+    if (level === 'replace') return <ShieldAlert className="w-3 h-3 shrink-0" />;
+    return <Calendar className="w-3 h-3 shrink-0" />;
+  };
 
   // Batch Calculator State
   const activeRecipe =
@@ -297,30 +337,174 @@ export const WaterRecipesView: React.FC<WaterRecipesViewProps> = ({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-            <div className="bg-slate-900/70 border border-slate-800 rounded-lg p-3.5 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-sky-300">Concentrate 1: Magnesium</span>
-                <span className="text-[10px] font-mono text-slate-400">Extraction / Body</span>
+            {/* Concentrate 1: Magnesium */}
+            <div className="bg-slate-900/70 border border-slate-800 rounded-lg p-3.5 space-y-2.5 flex flex-col justify-between">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-sky-300">Concentrate 1: Magnesium</span>
+                  <span className="text-[10px] font-mono text-slate-400">Extraction / Body</span>
+                </div>
+                <div className="font-mono text-white text-sm font-bold">
+                  12.3 g Epsom Salt → 500 g total
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Kruidvat Bitterzout (MgSO₄·7H₂O) topped up to 500 g with Montcalm or Spa Reine. Store in fridge.
+                </p>
+                <div className="text-[11px] text-sky-200/90 bg-sky-500/10 border border-sky-500/20 rounded-md px-2.5 py-1.5 leading-snug">
+                  <strong className="font-mono text-sky-300">Dissolution:</strong> Shake vigorously for <strong className="text-white">20–30 sec</strong> at room temp until all crystals disappear and the liquid is completely clear.
+                </div>
               </div>
-              <div className="font-mono text-white text-sm font-bold">
-                12.3 g Epsom Salt → 500 g total
+
+              <div className="pt-2.5 border-t border-slate-800/80 space-y-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <label
+                    htmlFor="mg-prepared-date"
+                    className="text-[11px] font-mono text-slate-300 flex items-center gap-1"
+                  >
+                    <Calendar className="w-3 h-3 text-sky-400" />
+                    <span>Prepared Date</span>
+                  </label>
+                  <span
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded border flex items-center gap-1 ${getStorageBadgeClasses(
+                      mgStorage.level
+                    )}`}
+                  >
+                    {renderStorageIcon(mgStorage.level)}
+                    <span>{mgStorage.badgeText}</span>
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <input
+                    id="mg-prepared-date"
+                    type="date"
+                    max={todayDateStr}
+                    value={concentrateBatches.magnesiumPreparedDate}
+                    onChange={(e) =>
+                      onUpdateConcentrateBatches({
+                        ...concentrateBatches,
+                        magnesiumPreparedDate: e.target.value,
+                      })
+                    }
+                    className="flex-1 bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1 text-[11px] font-mono text-white focus:outline-none focus:border-sky-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdateConcentrateBatches({
+                        ...concentrateBatches,
+                        magnesiumPreparedDate: todayDateStr,
+                      })
+                    }
+                    className="px-2.5 py-1 rounded-md bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 text-[11px] font-mono font-medium transition-colors shrink-0"
+                  >
+                    Today
+                  </button>
+                  {concentrateBatches.magnesiumPreparedDate && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onUpdateConcentrateBatches({
+                          ...concentrateBatches,
+                          magnesiumPreparedDate: '',
+                        })
+                      }
+                      title="Clear preparation date"
+                      aria-label="Clear Magnesium preparation date"
+                      className="p-1 text-slate-500 hover:text-slate-300 rounded hover:bg-slate-800"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <p className="text-[10px] text-slate-400 leading-relaxed">{mgStorage.guidance}</p>
               </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Kruidvat Bitterzout (MgSO₄·7H₂O) topped up to 500 g with Montcalm or Spa Reine. Store in fridge.
-              </p>
             </div>
 
-            <div className="bg-slate-900/70 border border-slate-800 rounded-lg p-3.5 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-amber-300">Concentrate 2: Buffer</span>
-                <span className="text-[10px] font-mono text-slate-400">Acidity Control</span>
+            {/* Concentrate 2: Buffer */}
+            <div className="bg-slate-900/70 border border-slate-800 rounded-lg p-3.5 space-y-2.5 flex flex-col justify-between">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-amber-300">Concentrate 2: Buffer</span>
+                  <span className="text-[10px] font-mono text-slate-400">Acidity Control</span>
+                </div>
+                <div className="font-mono text-white text-sm font-bold">
+                  8.4 g Baking Soda → 500 g total
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Kruidvat Zuiveringszout (NaHCO₃) topped up to 500 g with Montcalm or Spa Reine. Store in fridge.
+                </p>
+                <div className="text-[11px] text-amber-200/90 bg-amber-500/10 border border-amber-500/20 rounded-md px-2.5 py-1.5 leading-snug">
+                  <strong className="font-mono text-amber-300">Dissolution:</strong> Shake vigorously for <strong className="text-white">60–90 sec</strong> at room temp, let settle 15 sec to check bottom, and shake another 15–30 sec until no white powder remains.
+                </div>
               </div>
-              <div className="font-mono text-white text-sm font-bold">
-                8.4 g Baking Soda → 500 g total
+
+              <div className="pt-2.5 border-t border-slate-800/80 space-y-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <label
+                    htmlFor="buf-prepared-date"
+                    className="text-[11px] font-mono text-slate-300 flex items-center gap-1"
+                  >
+                    <Calendar className="w-3 h-3 text-amber-400" />
+                    <span>Prepared Date</span>
+                  </label>
+                  <span
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded border flex items-center gap-1 ${getStorageBadgeClasses(
+                      bufStorage.level
+                    )}`}
+                  >
+                    {renderStorageIcon(bufStorage.level)}
+                    <span>{bufStorage.badgeText}</span>
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <input
+                    id="buf-prepared-date"
+                    type="date"
+                    max={todayDateStr}
+                    value={concentrateBatches.bufferPreparedDate}
+                    onChange={(e) =>
+                      onUpdateConcentrateBatches({
+                        ...concentrateBatches,
+                        bufferPreparedDate: e.target.value,
+                      })
+                    }
+                    className="flex-1 bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1 text-[11px] font-mono text-white focus:outline-none focus:border-amber-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdateConcentrateBatches({
+                        ...concentrateBatches,
+                        bufferPreparedDate: todayDateStr,
+                      })
+                    }
+                    className="px-2.5 py-1 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[11px] font-mono font-medium transition-colors shrink-0"
+                  >
+                    Today
+                  </button>
+                  {concentrateBatches.bufferPreparedDate && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onUpdateConcentrateBatches({
+                          ...concentrateBatches,
+                          bufferPreparedDate: '',
+                        })
+                      }
+                      title="Clear preparation date"
+                      aria-label="Clear Buffer preparation date"
+                      className="p-1 text-slate-500 hover:text-slate-300 rounded hover:bg-slate-800"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <p className="text-[10px] text-slate-400 leading-relaxed">{bufStorage.guidance}</p>
               </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Kruidvat Zuiveringszout (NaHCO₃) topped up to 500 g with Montcalm or Spa Reine. Store in fridge.
-              </p>
             </div>
           </div>
 
@@ -337,6 +521,53 @@ export const WaterRecipesView: React.FC<WaterRecipesViewProps> = ({
               <div>
                 <span className="text-amber-300 font-mono font-semibold">+Magnesium</span> boosts body/sweetness/extraction ·{' '}
                 <span className="text-sky-300 font-mono font-semibold">−Magnesium</span> cuts bitterness/astringency
+              </div>
+            </div>
+          </div>
+
+          {/* Chlorine-Free Cold Storage & Biofilm Prevention Guide */}
+          <div className="bg-slate-900/60 border border-amber-500/20 rounded-lg p-3.5 text-xs space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="font-mono text-[11px] uppercase tracking-wider text-amber-300 flex items-center gap-1.5 font-semibold">
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>Chlorine-Free Fridge Shelf Life & Biofilm Prevention (≤ 4 °C)</span>
+              </div>
+              <span className="text-[10px] font-mono text-slate-400">
+                Safe target: 3 weeks (max 30 days)
+              </span>
+            </div>
+
+            <p className="text-[11px] text-slate-300 leading-relaxed">
+              Bottled Montcalm and Spa Reine contain <strong className="text-white">zero residual chlorine</strong>, and dilute Epsom salt (~2.5%) or baking soda (~1.7%) are not antimicrobial. Cold-tolerant bacteria introduced from air or dosing tools can gradually colonize bottle walls and form biofilm even in a refrigerator.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+              <div className="bg-emerald-950/20 border border-emerald-500/25 rounded-md p-2">
+                <div className="font-mono font-semibold text-emerald-300">0–21 Days · Safe</div>
+                <p className="text-slate-400 mt-0.5 leading-snug">
+                  Prime window in a clean sealed glass bottle at ≤ 4 °C with clean pouring.
+                </p>
+              </div>
+              <div className="bg-amber-950/20 border border-amber-500/25 rounded-md p-2">
+                <div className="font-mono font-semibold text-amber-300">22–30 Days · Caution</div>
+                <p className="text-slate-400 mt-0.5 leading-snug">
+                  Check against light for faint haze or slickness inside neck; plan a fresh batch.
+                </p>
+              </div>
+              <div className="bg-rose-950/20 border border-rose-500/25 rounded-md p-2">
+                <div className="font-mono font-semibold text-rose-300">&gt; 30 Days · Remake</div>
+                <p className="text-slate-400 mt-0.5 leading-snug">
+                  Biofilm risk rises sharply. Discard leftovers, wash &amp; boil-sanitize bottle, and remix.
+                </p>
+              </div>
+            </div>
+
+            <div className="text-[11px] text-slate-400 space-y-1 pt-0.5">
+              <div>
+                <strong className="text-slate-200">Hygiene tip:</strong> Store in <strong className="text-slate-300">glass</strong> (not scratched plastic) and <strong className="text-slate-300">pour</strong> into a clean dosing cup on your scale rather than dipping pipettes or spoons into the stock bottle.
+              </div>
+              <div>
+                <strong className="text-slate-200">Batch sizing:</strong> A 500 g bottle yields ~83 L (Mg) / ~150 L (Buffer) at 9 g / 5 g per 1.5 L. If you brew less than ~15 L/month, mixing <strong className="text-slate-300">250 g half-batches</strong> (6.15 g Epsom / 4.2 g baking soda) avoids wasting expired stock.
               </div>
             </div>
           </div>

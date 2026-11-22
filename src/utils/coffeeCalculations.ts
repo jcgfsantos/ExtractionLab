@@ -222,6 +222,82 @@ export function calculateWaterChemistry(params: {
   };
 }
 
+export interface ConcentrateStorageStatus {
+  hasDate: boolean;
+  daysInFridge: number | null;
+  level: 'unset' | 'safe' | 'caution' | 'replace';
+  badgeText: string;
+  guidance: string;
+}
+
+export function getTodayLocalDateInput(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+export function getConcentrateStorageStatus(preparedDateStr?: string): ConcentrateStorageStatus {
+  if (!preparedDateStr) {
+    return {
+      hasDate: false,
+      daysInFridge: null,
+      level: 'unset',
+      badgeText: 'Prep date not set',
+      guidance:
+        'Log the preparation date to track cold storage age (safe for ~21–30 days at ≤ 4 °C in chlorine-free water).',
+    };
+  }
+
+  const parts = preparedDateStr.split('-').map(Number);
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) {
+    return {
+      hasDate: false,
+      daysInFridge: null,
+      level: 'unset',
+      badgeText: 'Invalid date',
+      guidance: 'Choose a valid preparation date.',
+    };
+  }
+
+  const [y, m, d] = parts;
+  const prepUtc = Date.UTC(y, m - 1, d);
+  const now = new Date();
+  const todayUtc = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.floor((todayUtc - prepUtc) / (1000 * 60 * 60 * 24));
+  const days = Math.max(0, diffDays);
+
+  if (days <= 21) {
+    const remainingPrime = 21 - days;
+    return {
+      hasDate: true,
+      daysInFridge: days,
+      level: 'safe',
+      badgeText: `${days}d in fridge · Safe`,
+      guidance: `Within optimal 21-day window (${remainingPrime}d left in prime safety zone). Keep sealed at ≤ 4 °C.`,
+    };
+  }
+
+  if (days <= 30) {
+    const remainingMax = 30 - days;
+    return {
+      hasDate: true,
+      daysInFridge: days,
+      level: 'caution',
+      badgeText: `${days}d in fridge · Caution`,
+      guidance: `Between 22–30 days in chlorine-free water: inspect for haze or slick bottle walls; remake within ${remainingMax}d.`,
+    };
+  }
+
+  return {
+    hasDate: true,
+    daysInFridge: days,
+    level: 'replace',
+    badgeText: `${days}d in fridge · Remake`,
+    guidance:
+      'Over 30 days in chlorine-free water: biofilm growth risk is elevated. Discard, sanitize bottle, and mix a fresh batch.',
+  };
+}
+
 export function getRatioCategory(ratio: number): { label: string; description: string } {
   if (ratio <= 0) return { label: 'Pending', description: 'Enter dose and yield' };
   if (ratio < 1.6) return { label: 'Ristretto', description: 'Concentrated, viscous, high tactile body' };

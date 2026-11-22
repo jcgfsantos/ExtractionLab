@@ -18,6 +18,7 @@ import {
   MachineProfile,
   BasketProfile,
   WaterRecipe,
+  WaterConcentrateBatches,
 } from './types/espresso';
 import {
   loadBeans,
@@ -34,6 +35,8 @@ import {
   saveBaskets,
   loadWaterRecipes,
   saveWaterRecipes,
+  loadWaterConcentrateBatches,
+  saveWaterConcentrateBatches,
   loadActiveBeanId,
   saveActiveBeanId,
   loadActiveGrinderId,
@@ -62,6 +65,9 @@ export default function App() {
   const [machines, setMachines] = useState<MachineProfile[]>(() => loadMachines());
   const [baskets, setBaskets] = useState<BasketProfile[]>(() => loadBaskets());
   const [waterRecipes, setWaterRecipes] = useState<WaterRecipe[]>(() => loadWaterRecipes());
+  const [waterConcentrateBatches, setWaterConcentrateBatches] = useState<WaterConcentrateBatches>(() =>
+    loadWaterConcentrateBatches()
+  );
   const [equipment, setEquipment] = useState<UserEquipment>(() => loadEquipment());
   const [activeBeanId, setActiveBeanId] = useState<string>(() => loadActiveBeanId());
   const [activeGrinderId, setActiveGrinderId] = useState<string>(() => loadActiveGrinderId());
@@ -132,6 +138,10 @@ export default function App() {
   useEffect(() => {
     saveActiveWaterRecipeId(activeWaterRecipeId);
   }, [activeWaterRecipeId]);
+
+  useEffect(() => {
+    saveWaterConcentrateBatches(waterConcentrateBatches);
+  }, [waterConcentrateBatches]);
 
   useEffect(() => {
     saveEquipment(equipment);
@@ -558,6 +568,7 @@ export default function App() {
     machines?: MachineProfile[];
     baskets?: BasketProfile[];
     waterRecipes?: WaterRecipe[];
+    waterConcentrateBatches?: WaterConcentrateBatches;
     equipment?: UserEquipment;
     notice?: string;
   }) => {
@@ -593,6 +604,12 @@ export default function App() {
         setActiveWaterRecipeId(data.waterRecipes[0].id);
       }
     }
+    if (data.waterConcentrateBatches) {
+      setWaterConcentrateBatches({
+        magnesiumPreparedDate: data.waterConcentrateBatches.magnesiumPreparedDate || '',
+        bufferPreparedDate: data.waterConcentrateBatches.bufferPreparedDate || '',
+      });
+    }
     if (data.equipment) {
       setEquipment({ ...DEFAULT_EQUIPMENT, ...data.equipment });
     }
@@ -610,6 +627,7 @@ export default function App() {
     setMachines(res.machines);
     setBaskets(res.baskets);
     setWaterRecipes(res.waterRecipes);
+    setWaterConcentrateBatches(res.waterConcentrateBatches);
     setEquipment(res.equipment);
     setActiveBeanId('bean-1');
     setActiveGrinderId('grinder-1');
@@ -769,6 +787,8 @@ export default function App() {
             waterRecipes={waterRecipes}
             shots={shots}
             activeWaterRecipeId={activeWaterRecipeId}
+            concentrateBatches={waterConcentrateBatches}
+            onUpdateConcentrateBatches={setWaterConcentrateBatches}
             onSetActiveWaterRecipe={handleSelectWaterRecipe}
             onSaveWaterRecipe={handleSaveWaterRecipe}
             onDeleteWaterRecipe={handleDeleteWaterRecipe}
@@ -860,6 +880,7 @@ export default function App() {
           machines={machines}
           baskets={baskets}
           waterRecipes={waterRecipes}
+          waterConcentrateBatches={waterConcentrateBatches}
           equipment={equipment}
           onImportData={handleImportData}
           onResetDefaults={handleResetDefaults}

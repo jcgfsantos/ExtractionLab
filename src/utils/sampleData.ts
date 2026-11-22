@@ -6,6 +6,7 @@ import {
   MachineProfile,
   BasketProfile,
   WaterRecipe,
+  WaterConcentrateBatches,
   PuckPrep,
   ChannelingLevel,
   TasteProfile,
@@ -503,6 +504,7 @@ const STORAGE_KEYS = {
   MACHINES: 'extractionlab_machines_v1',
   BASKETS: 'extractionlab_baskets_v1',
   WATER_RECIPES: 'extractionlab_water_recipes_v1',
+  WATER_CONCENTRATE_BATCHES: 'extractionlab_water_concentrate_batches_v1',
   ACTIVE_BEAN_ID: 'extractionlab_active_bean_v1',
   ACTIVE_GRINDER_ID: 'extractionlab_active_grinder_v1',
   ACTIVE_MACHINE_ID: 'extractionlab_active_machine_v1',
@@ -751,6 +753,40 @@ export function saveActiveWaterRecipeId(id: string): void {
   }
 }
 
+export const DEFAULT_WATER_CONCENTRATE_BATCHES: WaterConcentrateBatches = {
+  magnesiumPreparedDate: '',
+  bufferPreparedDate: '',
+};
+
+export function loadWaterConcentrateBatches(): WaterConcentrateBatches {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.WATER_CONCENTRATE_BATCHES);
+    if (!raw) {
+      return DEFAULT_WATER_CONCENTRATE_BATCHES;
+    }
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return {
+        magnesiumPreparedDate:
+          typeof parsed.magnesiumPreparedDate === 'string' ? parsed.magnesiumPreparedDate : '',
+        bufferPreparedDate:
+          typeof parsed.bufferPreparedDate === 'string' ? parsed.bufferPreparedDate : '',
+      };
+    }
+    return DEFAULT_WATER_CONCENTRATE_BATCHES;
+  } catch {
+    return DEFAULT_WATER_CONCENTRATE_BATCHES;
+  }
+}
+
+export function saveWaterConcentrateBatches(batches: WaterConcentrateBatches): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.WATER_CONCENTRATE_BATCHES, JSON.stringify(batches));
+  } catch (err) {
+    console.error('Failed to save water concentrate batch dates', err);
+  }
+}
+
 export function loadBeans(): BeanBag[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.BEANS);
@@ -892,6 +928,7 @@ export function resetToDefaults(): {
   machines: MachineProfile[];
   baskets: BasketProfile[];
   waterRecipes: WaterRecipe[];
+  waterConcentrateBatches: WaterConcentrateBatches;
   equipment: UserEquipment;
 } {
   saveBeans(INITIAL_BEANS);
@@ -901,6 +938,7 @@ export function resetToDefaults(): {
   saveMachines(INITIAL_MACHINES);
   saveBaskets(INITIAL_BASKETS);
   saveWaterRecipes(INITIAL_WATER_RECIPES);
+  saveWaterConcentrateBatches(DEFAULT_WATER_CONCENTRATE_BATCHES);
   saveEquipment(DEFAULT_EQUIPMENT);
   saveActiveBeanId('bean-1');
   saveActiveGrinderId('grinder-1');
@@ -916,6 +954,7 @@ export function resetToDefaults(): {
     machines: INITIAL_MACHINES,
     baskets: INITIAL_BASKETS,
     waterRecipes: INITIAL_WATER_RECIPES,
+    waterConcentrateBatches: DEFAULT_WATER_CONCENTRATE_BATCHES,
     equipment: DEFAULT_EQUIPMENT,
   };
 }

@@ -91,6 +91,11 @@ export interface WaterConcentrateRecipe {
   totalSolutionGrams: number; // e.g. 500
 }
 
+export interface WaterConcentrateBatches {
+  magnesiumPreparedDate: string; // YYYY-MM-DD or ''
+  bufferPreparedDate: string; // YYYY-MM-DD or ''
+}
+
 export interface WaterRecipe {
   id: string;
   name: string; // e.g. "Baseline Montcalm / Spa Reine (9g Mg / 5g Buffer)"

@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { EspressoShot, BeanBag, BrewPreset, GrinderProfile, MachineProfile, BasketProfile, WaterRecipe } from '../types/espresso';
+import { EspressoShot, BeanBag, BrewPreset, GrinderProfile, MachineProfile, BasketProfile, WaterRecipe, WaterConcentrateBatches } from '../types/espresso';
 import { UserEquipment } from '../utils/sampleData';
 import { calculateActualFlowRate } from '../utils/coffeeCalculations';
 import { importDatabaseFromCsv } from '../utils/csvImport';
@@ -13,6 +13,7 @@ interface DataManagementModalProps {
   machines: MachineProfile[];
   baskets: BasketProfile[];
   waterRecipes: WaterRecipe[];
+  waterConcentrateBatches: WaterConcentrateBatches;
   equipment: UserEquipment;
   onImportData: (data: {
     shots?: EspressoShot[];
@@ -22,6 +23,7 @@ interface DataManagementModalProps {
     machines?: MachineProfile[];
     baskets?: BasketProfile[];
     waterRecipes?: WaterRecipe[];
+    waterConcentrateBatches?: WaterConcentrateBatches;
     equipment?: UserEquipment;
     notice?: string;
   }) => void;
@@ -37,6 +39,7 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
   machines,
   baskets,
   waterRecipes,
+  waterConcentrateBatches,
   equipment,
   onImportData,
   onResetDefaults,
@@ -126,6 +129,7 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
       machines,
       baskets,
       waterRecipes,
+      waterConcentrateBatches,
       equipment,
       shots,
       presets,
@@ -150,7 +154,7 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
     reader.onload = (event) => {
       try {
         const json = JSON.parse(event.target?.result as string);
-        if (json.shots || json.beans || json.grinders || json.machines || json.baskets || json.waterRecipes || json.equipment || json.presets) {
+        if (json.shots || json.beans || json.grinders || json.machines || json.baskets || json.waterRecipes || json.waterConcentrateBatches || json.equipment || json.presets) {
           const shotCount = Array.isArray(json.shots) ? json.shots.length : 0;
           const beanCount = Array.isArray(json.beans) ? json.beans.length : 0;
           onImportData({
@@ -161,6 +165,7 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
             machines: json.machines,
             baskets: json.baskets,
             waterRecipes: json.waterRecipes,
+            waterConcentrateBatches: json.waterConcentrateBatches,
             equipment: json.equipment,
             notice: `JSON backup imported (${shotCount} shots, ${beanCount} bean bags)`,
           });
