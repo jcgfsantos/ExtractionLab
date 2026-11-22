@@ -1,0 +1,6 @@
+{
+  "name": "ExtractionLab - Espresso Coffee Logger",
+  "description": "Precision espresso extraction logger, live shot timer, dial-in telemetry, and sensory analysis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
