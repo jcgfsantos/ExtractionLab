@@ -14,6 +14,7 @@ import {
   Gauge,
   Droplets,
   Activity,
+  Scale,
   ZoomIn,
   ZoomOut,
   RotateCcw,
@@ -97,7 +98,7 @@ interface AxisZoomControlsProps {
   onZoomX: (factor: number) => void;
   onZoomY: (factor: number) => void;
   onReset: () => void;
-  accentColor?: 'amber' | 'sky';
+  accentColor?: 'amber' | 'sky' | 'emerald';
 }
 
 const AxisZoomControls: React.FC<AxisZoomControlsProps> = ({
@@ -113,7 +114,12 @@ const AxisZoomControls: React.FC<AxisZoomControlsProps> = ({
     Math.abs(zoom.xPan) > 0.001 ||
     Math.abs(zoom.yPan) > 0.001;
 
-  const badgeTextClass = accentColor === 'sky' ? 'text-sky-300' : 'text-amber-300';
+  const badgeTextClass =
+    accentColor === 'sky'
+      ? 'text-sky-300'
+      : accentColor === 'emerald'
+      ? 'text-emerald-300'
+      : 'text-amber-300';
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono">
@@ -252,6 +258,7 @@ export const DialInAnalyticsView: React.FC<DialInAnalyticsViewProps> = ({
 
   // Independent Zoom & Pan states for each chart
   const [timeZoom, setTimeZoom] = useState<ChartZoomState>(DEFAULT_ZOOM);
+  const [massZoom, setMassZoom] = useState<ChartZoomState>(DEFAULT_ZOOM);
   const [flowZoom, setFlowZoom] = useState<ChartZoomState>(DEFAULT_ZOOM);
 
   const relevantShots = useMemo(() => {
@@ -409,6 +416,87 @@ export const DialInAnalyticsView: React.FC<DialInAnalyticsViewProps> = ({
     };
   }, [relevantShots, timeZoom, innerWidth, innerHeight, padding.left, padding.top]);
 
+  // --- Graph 1b: Shot Sequence vs Mass Out (Beverage Yield) Curve ---
+  const [inspectedMassShotId, setInspectedMassShotId] = useState<string | null>(null);
+
+  const massChart = useMemo(() => {
+    if (relevantShots.length === 0) return null;
+
+    const yields = relevantShots.map((s) => s.yieldGrams);
+    const rawMinYield = Math.min(...yields);
+    const rawMaxYield = Math.max(...yields);
+    const avgYield = yields.reduce((sum, y) => sum + y, 0) / yields.length;
+
+    const baseMinY = Math.max(0, Math.floor((rawMinYield - 4) / 5) * 5);
+    const baseMaxY = Math.max(baseMinY + 15, Math.ceil((rawMaxYield + 4) / 5) * 5);
+
+    const n = relevantShots.length;
+    const baseMinX = n === 1 ? -0.5 : -0.35;
+    const baseMaxX = n === 1 ? 0.5 : n - 1 + 0.35;
+
+    const xRange = computeAxisRange(baseMinX, baseMaxX, massZoom.xZoom, massZoom.xPan, false);
+    const yRange = computeAxisRange(baseMinY, baseMaxY, massZoom.yZoom, massZoom.yPan, true);
+
+    const toSvgX = (idxVal: number) =>
+      padding.left + ((idxVal - xRange.viewMin) / xRange.viewSpan) * innerWidth;
+    const toSvgY = (gramsVal: number) =>
+      padding.top + innerHeight - ((gramsVal - yRange.viewMin) / yRange.viewSpan) * innerHeight;
+
+    const yStep = getNiceStep(yRange.viewSpan, 6);
+    const yTicks: { val: number; y: number; label: string }[] = [];
+    for (
+      let v = Math.ceil(yRange.viewMin / yStep) * yStep;
+      v <= yRange.viewMax + 1e-6;
+      v += yStep
+    ) {
+      const rounded = Number(v.toFixed(2));
+      yTicks.push({
+        val: rounded,
+        y: toSvgY(rounded),
+        label: `${formatAxisNumber(rounded, yStep)}g`,
+      });
+    }
+
+    const startIdx = Math.max(0, Math.ceil(xRange.viewMin - 0.01));
+    const endIdx = Math.min(n - 1, Math.floor(xRange.viewMax + 0.01));
+    const visibleShotCount = Math.max(1, endIdx - startIdx + 1);
+    const xStep = Math.max(1, Math.ceil(visibleShotCount / 9));
+    const xTicks: { index: number; x: number; rating: number }[] = [];
+    for (let i = startIdx; i <= endIdx; i += xStep) {
+      xTicks.push({
+        index: i,
+        x: toSvgX(i),
+        rating: relevantShots[i].rating,
+      });
+    }
+
+    const pts = relevantShots.map((shot, index) => ({
+      x: toSvgX(index),
+      y: toSvgY(shot.yieldGrams),
+      shot,
+      index,
+    }));
+
+    const linePath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+
+    return {
+      ...xRange,
+      viewMinY: yRange.viewMin,
+      viewMaxY: yRange.viewMax,
+      viewSpanY: yRange.viewSpan,
+      baseSpanY: yRange.baseSpan,
+      viewSpanX: xRange.viewSpan,
+      baseSpanX: xRange.baseSpan,
+      avgYield,
+      toSvgX,
+      toSvgY,
+      yTicks,
+      xTicks,
+      pts,
+      linePath,
+    };
+  }, [relevantShots, massZoom, innerWidth, innerHeight, padding.left, padding.top]);
+
   // --- Graph 2: Actual Grinder Position vs Actual Flow Rate ---
   const [selectedGrinderFilter, setSelectedGrinderFilter] = useState<string>('auto');
   const [inspectedShotId, setInspectedShotId] = useState<string | null>(null);
@@ -476,6 +564,7 @@ export const DialInAnalyticsView: React.FC<DialInAnalyticsViewProps> = ({
   // Reset zoom/pan cleanly when filter context changes
   useEffect(() => {
     setTimeZoom(DEFAULT_ZOOM);
+    setMassZoom(DEFAULT_ZOOM);
     setFlowZoom(DEFAULT_ZOOM);
   }, [selectedBeanId, effectiveMachineKey]);
 
@@ -636,9 +725,9 @@ export const DialInAnalyticsView: React.FC<DialInAnalyticsViewProps> = ({
     };
   }, [filteredGrindFlowEntries, flowZoom]);
 
-  // Drag-to-pan handlers for both charts
+  // Drag-to-pan handlers for all charts
   const dragRef = useRef<{
-    chart: 'time' | 'flow';
+    chart: 'time' | 'mass' | 'flow';
     startX: number;
     startY: number;
     lastX: number;
@@ -646,10 +735,10 @@ export const DialInAnalyticsView: React.FC<DialInAnalyticsViewProps> = ({
     svgElement: SVGSVGElement;
     moved: boolean;
   } | null>(null);
-  const [draggingChart, setDraggingChart] = useState<'time' | 'flow' | null>(null);
+  const [draggingChart, setDraggingChart] = useState<'time' | 'mass' | 'flow' | null>(null);
 
   const handleSvgPointerDown = (
-    chart: 'time' | 'flow',
+    chart: 'time' | 'mass' | 'flow',
     e: React.PointerEvent<SVGSVGElement>
   ) => {
     if (e.button !== 0) return;
@@ -695,6 +784,18 @@ export const DialInAnalyticsView: React.FC<DialInAnalyticsViewProps> = ({
         xPan: prev.xPan + deltaPanX,
         yPan: prev.yPan + deltaPanY,
       }));
+    } else if (drag.chart === 'mass' && massChart) {
+      const scaleX = chartWidth / rect.width;
+      const scaleY = chartHeight / rect.height;
+      const dxSvg = dxPx * scaleX;
+      const dySvg = dyPx * scaleY;
+      const deltaPanX = -(dxSvg / innerWidth) * (massChart.viewSpanX / massChart.baseSpanX);
+      const deltaPanY = (dySvg / innerHeight) * (massChart.viewSpanY / massChart.baseSpanY);
+      setMassZoom((prev) => ({
+        ...prev,
+        xPan: prev.xPan + deltaPanX,
+        yPan: prev.yPan + deltaPanY,
+      }));
     } else if (drag.chart === 'flow' && grindFlowChart) {
       const scaleX = grindFlowChart.w / rect.width;
       const scaleY = grindFlowChart.h / rect.height;
@@ -715,12 +816,18 @@ export const DialInAnalyticsView: React.FC<DialInAnalyticsViewProps> = ({
     setDraggingChart(null);
   };
 
+  const inspectedMassEntry =
+    (massChart?.pts.find((p) => p.shot.id === inspectedMassShotId) ??
+      massChart?.pts[massChart.pts.length - 1]) ??
+    null;
+
   const inspectedEntry =
     filteredGrindFlowEntries.find((e) => e.shot.id === inspectedShotId) ??
     filteredGrindFlowEntries[filteredGrindFlowEntries.length - 1] ??
     null;
 
   const timeClipId = `time-plot-clip-${uid}`;
+  const massClipId = `mass-plot-clip-${uid}`;
   const flowClipId = `flow-plot-clip-${uid}`;
 
   return (
@@ -1081,6 +1188,248 @@ export const DialInAnalyticsView: React.FC<DialInAnalyticsViewProps> = ({
                   </g>
                 </svg>
               </div>
+            )}
+          </div>
+
+          {/* Graph 1b: Shot Sequence vs Mass Out Curve Chart */}
+          <div className="bg-[#141822] border border-slate-800 rounded-xl p-5 shadow-sm">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-800">
+              <div>
+                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <Scale className="w-4 h-4 text-emerald-400" />
+                  <span>Shot Sequence vs. Mass Out Curve</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Tracks beverage mass out (yield in grams) across consecutive shots. Drag plot to pan.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <AxisZoomControls
+                  zoom={massZoom}
+                  onZoomX={(factor) =>
+                    setMassZoom((prev) => ({ ...prev, xZoom: clampZoom(prev.xZoom * factor) }))
+                  }
+                  onZoomY={(factor) =>
+                    setMassZoom((prev) => ({ ...prev, yZoom: clampZoom(prev.yZoom * factor) }))
+                  }
+                  onReset={() => setMassZoom(DEFAULT_ZOOM)}
+                  accentColor="emerald"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4 text-[11px] font-mono text-slate-400 mb-3">
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-0.5 bg-emerald-400 inline-block" />
+                <span>Mass Out (g)</span>
+              </span>
+              {massChart && (
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-0.5 border-t border-dashed border-sky-400 inline-block" />
+                  <span>Mean Mass Out ({massChart.avgYield.toFixed(1)}g)</span>
+                </span>
+              )}
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" />
+                <span>Dialed-In Shot</span>
+              </span>
+            </div>
+
+            {massChart && (
+              <>
+                <div className="w-full overflow-x-auto">
+                  <svg
+                    viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                    onPointerDown={(e) => handleSvgPointerDown('mass', e)}
+                    onPointerMove={handleSvgPointerMove}
+                    onPointerUp={handleSvgPointerUp}
+                    onPointerCancel={handleSvgPointerUp}
+                    onPointerLeave={handleSvgPointerUp}
+                    className={`w-full h-auto min-w-[550px] select-none ${
+                      massZoom.xZoom > 1 || massZoom.yZoom > 1 ? 'touch-none' : 'touch-pan-y'
+                    } ${
+                      draggingChart === 'mass' ? 'cursor-grabbing' : 'cursor-grab'
+                    }`}
+                  >
+                    <defs>
+                      <clipPath id={massClipId}>
+                        <rect
+                          x={padding.left - 4}
+                          y={padding.top - 14}
+                          width={innerWidth + 8}
+                          height={innerHeight + 22}
+                        />
+                      </clipPath>
+                    </defs>
+
+                    {/* Horizontal reference lines */}
+                    {massChart.yTicks.map((tick) => (
+                      <g key={tick.val}>
+                        <line
+                          x1={padding.left}
+                          y1={tick.y}
+                          x2={chartWidth - padding.right}
+                          y2={tick.y}
+                          stroke="#1e293b"
+                          strokeWidth={1}
+                          opacity={0.85}
+                        />
+                        <text
+                          x={padding.left - 8}
+                          y={tick.y + 4}
+                          textAnchor="end"
+                          className="text-[10px] font-mono fill-slate-500"
+                        >
+                          {tick.label}
+                        </text>
+                      </g>
+                    ))}
+
+                    {/* Mean Mass Out dashed reference line */}
+                    {massChart.avgYield >= massChart.viewMinY &&
+                      massChart.avgYield <= massChart.viewMaxY && (
+                        <line
+                          x1={padding.left}
+                          y1={massChart.toSvgY(massChart.avgYield)}
+                          x2={chartWidth - padding.right}
+                          y2={massChart.toSvgY(massChart.avgYield)}
+                          stroke="#38bdf8"
+                          strokeWidth={1.5}
+                          strokeDasharray="4,4"
+                          opacity={0.7}
+                        />
+                      )}
+
+                    {/* Vertical X grid & Shot Index Labels */}
+                    {massChart.xTicks.map((tick) => (
+                      <g key={tick.index}>
+                        <line
+                          x1={tick.x}
+                          y1={padding.top}
+                          x2={tick.x}
+                          y2={padding.top + innerHeight}
+                          stroke="#1e293b"
+                          strokeWidth="1"
+                          opacity="0.45"
+                        />
+                        <text
+                          x={tick.x}
+                          y={chartHeight - 14}
+                          textAnchor="middle"
+                          className="text-[10px] font-mono fill-slate-400"
+                        >
+                          Shot #{tick.index + 1}
+                        </text>
+                        <text
+                          x={tick.x}
+                          y={chartHeight - 3}
+                          textAnchor="middle"
+                          className="text-[9px] font-mono fill-slate-500"
+                        >
+                          {tick.rating.toFixed(1)}★
+                        </text>
+                      </g>
+                    ))}
+
+                    {/* Clipped Plot Area */}
+                    <g clipPath={`url(#${massClipId})`}>
+                      {/* Connecting Line */}
+                      {massChart.pts.length > 1 && (
+                        <path
+                          d={massChart.linePath}
+                          fill="none"
+                          stroke="#34d399"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      )}
+
+                      {/* Data Vertex Points & Labels */}
+                      {massChart.pts.map((p) => {
+                        const isDialed = p.shot.isDialedIn;
+                        const isInspected = inspectedMassEntry?.shot.id === p.shot.id;
+                        return (
+                          <g
+                            key={p.shot.id}
+                            className="cursor-pointer"
+                            onMouseEnter={() => setInspectedMassShotId(p.shot.id)}
+                            onClick={() => setInspectedMassShotId(p.shot.id)}
+                          >
+                            <title>
+                              {`Shot #${p.index + 1}: ${p.shot.yieldGrams.toFixed(1)}g out from ${p.shot.doseGrams.toFixed(1)}g in (1:${p.shot.ratio.toFixed(2)}) · ${p.shot.totalTimeSeconds.toFixed(1)}s · ${p.shot.rating.toFixed(1)}★`}
+                            </title>
+                            <circle
+                              cx={p.x}
+                              cy={p.y}
+                              r={isInspected ? 7 : isDialed ? 6 : 4.5}
+                              fill={isDialed ? '#fbbf24' : '#0f172a'}
+                              stroke={isInspected ? '#ffffff' : isDialed ? '#f59e0b' : '#34d399'}
+                              strokeWidth={isInspected ? 2.5 : 2}
+                            />
+                            <text
+                              x={p.x}
+                              y={p.y - 10}
+                              textAnchor="middle"
+                              className={`text-[10px] font-mono font-bold ${
+                                isInspected ? 'fill-white' : 'fill-emerald-300'
+                              }`}
+                            >
+                              {p.shot.yieldGrams.toFixed(1)}g
+                            </text>
+                          </g>
+                        );
+                      })}
+                    </g>
+                  </svg>
+                </div>
+
+                {inspectedMassEntry && (
+                  <div className="mt-3 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs font-mono bg-slate-900/50 rounded-lg px-3 py-2">
+                    <div className="flex flex-wrap items-center gap-2 text-slate-300">
+                      <span className="text-emerald-400 font-semibold">
+                        Shot #{inspectedMassEntry.index + 1}
+                      </span>
+                      <span className="text-slate-600">·</span>
+                      <span className="text-white font-semibold">
+                        {inspectedMassEntry.shot.beanName}
+                      </span>
+                      {inspectedMassEntry.shot.waterRecipeName && (
+                        <>
+                          <span className="text-slate-600">·</span>
+                          <span className="text-sky-300">
+                            {inspectedMassEntry.shot.waterRecipeName}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 text-slate-300">
+                      <span>
+                        Mass Out:{' '}
+                        <strong className="text-emerald-300">
+                          {inspectedMassEntry.shot.yieldGrams.toFixed(1)}g
+                        </strong>
+                        <span className="text-slate-500 ml-1">
+                          ({inspectedMassEntry.shot.doseGrams.toFixed(1)}g in)
+                        </span>
+                      </span>
+                      <span>
+                        Ratio:{' '}
+                        <strong className="text-amber-300">
+                          1:{inspectedMassEntry.shot.ratio.toFixed(2)}
+                        </strong>
+                      </span>
+                      <span className="text-slate-400">
+                        {inspectedMassEntry.shot.totalTimeSeconds.toFixed(1)}s
+                      </span>
+                      <span className="text-amber-400">
+                        {inspectedMassEntry.shot.rating.toFixed(1)}★
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
