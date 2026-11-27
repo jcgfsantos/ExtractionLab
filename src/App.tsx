@@ -432,6 +432,9 @@ export default function App() {
     clearShotDraft();
     setAppliedPresetId(undefined);
     setTweakData({
+      beanId: shot.beanId,
+      beanName: shot.beanName,
+      roaster: shot.roaster,
       doseGrams: shot.doseGrams,
       yieldGrams: shot.yieldGrams,
       totalTimeSeconds: shot.totalTimeSeconds,
@@ -445,20 +448,24 @@ export default function App() {
       machine: shot.machine,
       basketId: shot.basketId,
       basket: shot.basket,
-      waterRecipeId: shot.waterRecipeId,
-      waterRecipeName: shot.waterRecipeName,
+      waterRecipeId: shot.waterRecipeId || (shot.waterRecipeName ? undefined : '__none__'),
+      waterRecipeName: shot.waterRecipeName ?? '',
       waterTempC: shot.waterTempC,
       peakPressureBars: shot.peakPressureBars,
-      puckPrep: shot.puckPrep,
+      puckPrep: { ...shot.puckPrep },
       channeling: shot.channeling,
-      tasteProfile: shot.tasteProfile,
+      tasteProfile: { ...shot.tasteProfile },
       flavorTags: [...shot.flavorTags],
       rating: shot.rating,
       notes: `Adjusted from shot @ Grind ${shot.grindSetting} (Actual ${shot.actualSetting?.toFixed(1) ?? shot.grindSetting})`,
       isDialedIn: false,
     });
-    if (shot.beanId) setActiveBeanId(shot.beanId);
-    if (shot.grinderId) setActiveGrinderId(shot.grinderId);
+    if (shot.beanId && beans.some((b) => b.id === shot.beanId)) {
+      setActiveBeanId(shot.beanId);
+    }
+    if (shot.grinderId && grinders.some((g) => g.id === shot.grinderId)) {
+      setActiveGrinderId(shot.grinderId);
+    }
     setFormKey((k) => k + 1);
     setCurrentTab('log');
     window.scrollTo({ top: 0, behavior: 'smooth' });

@@ -141,16 +141,28 @@ export const ShotForm: React.FC<ShotFormProps> = ({
   );
   const activeSelectedPreset = presets.find((p) => p.id === selectedPresetId) ?? defaultPreset;
 
-  const [selectedBeanId, setSelectedBeanId] = useState<string>(
-    editingShot?.beanId ?? savedDraft?.selectedBeanId ?? activeBeanId ?? beans[0]?.id ?? ''
-  );
+  const matchedSourceBean = sourceShot
+    ? beans.find((b) => b.id === sourceShot.beanId) ??
+      (sourceShot.beanName
+        ? beans.find(
+            (b) =>
+              b.name === sourceShot.beanName &&
+              (!sourceShot.roaster || b.roaster === sourceShot.roaster)
+          ) ?? beans.find((b) => b.name === sourceShot.beanName)
+        : undefined)
+    : undefined;
+  const initialBeanId = sourceShot
+    ? matchedSourceBean?.id ?? sourceShot.beanId ?? (sourceShot.beanName ? '__historical__' : activeBeanId ?? beans[0]?.id ?? '')
+    : savedDraft?.selectedBeanId ?? activeBeanId ?? beans[0]?.id ?? '';
+
+  const [selectedBeanId, setSelectedBeanId] = useState<string>(initialBeanId);
   const currentBean = beans.find((b) => b.id === selectedBeanId);
 
   const [beanName, setBeanName] = useState<string>(
-    editingShot?.beanName ?? savedDraft?.beanName ?? currentBean?.name ?? beans[0]?.name ?? ''
+    sourceShot?.beanName ?? savedDraft?.beanName ?? currentBean?.name ?? beans[0]?.name ?? ''
   );
   const [roaster, setRoaster] = useState<string>(
-    editingShot?.roaster ?? savedDraft?.roaster ?? currentBean?.roaster ?? beans[0]?.roaster ?? ''
+    sourceShot?.roaster ?? savedDraft?.roaster ?? currentBean?.roaster ?? beans[0]?.roaster ?? ''
   );
 
   // Date & Time Stamp
@@ -170,9 +182,13 @@ export const ShotForm: React.FC<ShotFormProps> = ({
   );
 
   // Machine & Basket selection (resolved early so machine defaults can initialize brew parameters)
+  const matchedSourceMachine = sourceShot
+    ? (sourceShot.machineId ? machines.find((m) => m.id === sourceShot.machineId) : undefined) ??
+      (sourceShot.machine ? machines.find((m) => m.name === sourceShot.machine) : undefined)
+    : undefined;
   const initialMachineId =
-    sourceShot?.machineId ??
-    (sourceShot?.machine ? machines.find((m) => m.name === sourceShot.machine)?.id : undefined) ??
+    matchedSourceMachine?.id ??
+    (sourceShot?.machineId && sourceShot?.machine ? sourceShot.machineId : undefined) ??
     (sourceShot?.machine ? '__custom__' : savedDraft?.selectedMachineId ?? activeMachineId ?? machines[0]?.id ?? '');
   const initialMatchedMachine = machines.find((m) => m.id === initialMachineId);
   const [selectedMachineId, setSelectedMachineId] = useState<string>(initialMachineId);
@@ -200,13 +216,15 @@ export const ShotForm: React.FC<ShotFormProps> = ({
   );
 
   // Equipment & Grinder
+  const matchedSourceGrinder = sourceShot
+    ? (sourceShot.grinderId ? grinders.find((g) => g.id === sourceShot.grinderId) : undefined) ??
+      (sourceShot.grinder ? grinders.find((g) => g.name === sourceShot.grinder) : undefined)
+    : undefined;
   const initialGrinderId =
-    sourceShot?.grinderId ??
-    (sourceShot?.grinder ? grinders.find((g) => g.name === sourceShot.grinder)?.id : undefined) ??
-    savedDraft?.selectedGrinderId ??
-    activeGrinderId ??
-    grinders[0]?.id ??
-    '';
+    matchedSourceGrinder?.id ??
+    (sourceShot && (sourceShot.grinderId || sourceShot.grinder)
+      ? sourceShot.grinderId || '__historical__'
+      : savedDraft?.selectedGrinderId ?? activeGrinderId ?? grinders[0]?.id ?? '');
   const initialMatchedGrinder = grinders.find((g) => g.id === initialGrinderId);
   const [selectedGrinderId, setSelectedGrinderId] = useState<string>(initialGrinderId);
   const matchedGrinder = grinders.find((g) => g.id === selectedGrinderId);
@@ -227,9 +245,13 @@ export const ShotForm: React.FC<ShotFormProps> = ({
     sourceShot?.zeroSetting ?? savedDraft?.zeroSetting ?? initialMatchedGrinder?.zeroSetting ?? 1.5
   );
 
+  const matchedSourceBasket = sourceShot
+    ? (sourceShot.basketId ? baskets.find((b) => b.id === sourceShot.basketId) : undefined) ??
+      (sourceShot.basket ? baskets.find((b) => b.name === sourceShot.basket) : undefined)
+    : undefined;
   const initialBasketId =
-    sourceShot?.basketId ??
-    (sourceShot?.basket ? baskets.find((b) => b.name === sourceShot.basket)?.id : undefined) ??
+    matchedSourceBasket?.id ??
+    (sourceShot?.basketId && sourceShot?.basket ? sourceShot.basketId : undefined) ??
     (sourceShot?.basket ? '__custom__' : savedDraft?.selectedBasketId ?? activeBasketId ?? baskets[0]?.id ?? '');
   const [selectedBasketId, setSelectedBasketId] = useState<string>(initialBasketId);
   const matchedBasket = baskets.find((b) => b.id === selectedBasketId);
@@ -237,19 +259,38 @@ export const ShotForm: React.FC<ShotFormProps> = ({
     sourceShot?.basket ?? savedDraft?.basket ?? matchedBasket?.name ?? baskets[0]?.name ?? '18g VST Precision (Ridgeless)'
   );
 
+  const matchedSourceWaterRecipe = sourceShot
+    ? (sourceShot.waterRecipeId &&
+      sourceShot.waterRecipeId !== '__none__' &&
+      sourceShot.waterRecipeId !== '__custom__' &&
+      sourceShot.waterRecipeId !== '__historical__'
+        ? waterRecipes.find((w) => w.id === sourceShot.waterRecipeId)
+        : undefined) ??
+      (sourceShot.waterRecipeName
+        ? waterRecipes.find((w) => w.name === sourceShot.waterRecipeName)
+        : undefined)
+    : undefined;
   const initialWaterRecipeId =
-    sourceShot?.waterRecipeId ??
-    (sourceShot?.waterRecipeName
-      ? waterRecipes.find((w) => w.name === sourceShot.waterRecipeName)?.id ?? '__custom__'
-      : isEditMode
+    sourceShot?.waterRecipeId === '__none__'
       ? '__none__'
-      : savedDraft?.selectedWaterRecipeId ?? activeWaterRecipeId ?? waterRecipes[0]?.id ?? '__none__');
+      : matchedSourceWaterRecipe?.id ??
+        (sourceShot?.waterRecipeId &&
+        sourceShot.waterRecipeId !== '__custom__' &&
+        sourceShot.waterRecipeName
+          ? sourceShot.waterRecipeId
+          : sourceShot?.waterRecipeName
+          ? '__custom__'
+          : isEditMode
+          ? '__none__'
+          : savedDraft?.selectedWaterRecipeId ?? activeWaterRecipeId ?? waterRecipes[0]?.id ?? '__none__');
   const initialMatchedWaterRecipe = waterRecipes.find((w) => w.id === initialWaterRecipeId);
   const [selectedWaterRecipeId, setSelectedWaterRecipeId] = useState<string>(initialWaterRecipeId);
   const matchedWaterRecipe = waterRecipes.find((w) => w.id === selectedWaterRecipeId);
   const [waterRecipeName, setWaterRecipeName] = useState<string>(
-    sourceShot?.waterRecipeName ??
-      (isEditMode ? '' : savedDraft?.waterRecipeName ?? initialMatchedWaterRecipe?.name ?? '')
+    initialWaterRecipeId === '__none__'
+      ? ''
+      : sourceShot?.waterRecipeName ||
+          (isEditMode ? '' : savedDraft?.waterRecipeName ?? initialMatchedWaterRecipe?.name ?? '')
   );
 
   const [waterTempC, setWaterTempC] = useState<number>(
@@ -261,14 +302,15 @@ export const ShotForm: React.FC<ShotFormProps> = ({
 
   // Puck Prep
   const [puckPrep, setPuckPrep] = useState<PuckPrep>(
-    sourceShot?.puckPrep ??
-      savedDraft?.puckPrep ?? {
-        wdt: true,
-        puckScreen: true,
-        distributionTool: false,
-        paperFilterBottom: false,
-        paperFilterTop: false,
-      }
+    sourceShot?.puckPrep
+      ? { ...sourceShot.puckPrep }
+      : savedDraft?.puckPrep ?? {
+          wdt: true,
+          puckScreen: true,
+          distributionTool: false,
+          paperFilterBottom: false,
+          paperFilterTop: false,
+        }
   );
   const [channeling, setChanneling] = useState<ChannelingLevel>(
     sourceShot?.channeling ?? savedDraft?.channeling ?? 'None / Clean'
@@ -276,20 +318,22 @@ export const ShotForm: React.FC<ShotFormProps> = ({
 
   // Sensory Evaluation
   const [tasteProfile, setTasteProfile] = useState<TasteProfile>(
-    sourceShot?.tasteProfile ??
-      savedDraft?.tasteProfile ?? {
-        acidity: 3,
-        sweetness: 4,
-        bitterness: 2,
-        body: 3,
-        crema: 4,
-        clarity: 4,
-      }
+    sourceShot?.tasteProfile
+      ? { ...sourceShot.tasteProfile }
+      : savedDraft?.tasteProfile ?? {
+          acidity: 3,
+          sweetness: 4,
+          bitterness: 2,
+          body: 3,
+          crema: 4,
+          clarity: 4,
+        }
   );
   const [flavorTags, setFlavorTags] = useState<string[]>(
-    sourceShot?.flavorTags ??
-      savedDraft?.flavorTags ??
-      (currentBean?.flavorTags ? [...currentBean.flavorTags] : [])
+    sourceShot?.flavorTags
+      ? [...sourceShot.flavorTags]
+      : savedDraft?.flavorTags ??
+          (currentBean?.flavorTags ? [...currentBean.flavorTags] : [])
   );
   const [customTagInput, setCustomTagInput] = useState<string>('');
   const [rating, setRating] = useState<number>(sourceShot?.rating ?? savedDraft?.rating ?? 4.0);
@@ -302,7 +346,11 @@ export const ShotForm: React.FC<ShotFormProps> = ({
     elapsedMs: savedDraft?.stopwatchElapsedMs ?? 0,
     preInfusionMs: savedDraft?.stopwatchPreInfusionMs ?? null,
     runningStartedAt: savedDraft?.stopwatchRunningStartedAt ?? null,
-    customTargetSeconds: savedDraft?.stopwatchCustomTargetSeconds ?? defaultPreset?.targetTime ?? 28,
+    customTargetSeconds:
+      savedDraft?.stopwatchCustomTargetSeconds ??
+      sourceShot?.totalTimeSeconds ??
+      defaultPreset?.targetTime ??
+      28,
   }));
 
   const [hasDraftSaved, setHasDraftSaved] = useState<boolean>(
@@ -450,9 +498,9 @@ export const ShotForm: React.FC<ShotFormProps> = ({
         setFlavorTags(nextBeanFlavors);
         prevBeanFlavorTagsRef.current = nextBeanFlavors;
       }
-    } else if (editingShot && id === editingShot.beanId) {
-      setBeanName(editingShot.beanName);
-      setRoaster(editingShot.roaster);
+    } else if (sourceShot && id === (sourceShot.beanId || '__historical__')) {
+      setBeanName(sourceShot.beanName ?? '');
+      setRoaster(sourceShot.roaster ?? '');
     }
   };
 
@@ -465,9 +513,9 @@ export const ShotForm: React.FC<ShotFormProps> = ({
     if (g) {
       setGrinderName(g.name);
       setZeroSetting(g.zeroSetting);
-    } else if (editingShot && id === (editingShot.grinderId || '__historical__')) {
-      setGrinderName(editingShot.grinder);
-      setZeroSetting(editingShot.zeroSetting ?? 0);
+    } else if (sourceShot && id === (sourceShot.grinderId || '__historical__')) {
+      setGrinderName(sourceShot.grinder ?? '');
+      setZeroSetting(sourceShot.zeroSetting ?? 0);
     }
   };
 
@@ -485,8 +533,8 @@ export const ShotForm: React.FC<ShotFormProps> = ({
         }
         prevMachineDefaultPreInfRef.current = m.defaultPreInfusionSeconds;
       }
-    } else if (editingShot && id === (editingShot.machineId || '__historical__')) {
-      setMachine(editingShot.machine);
+    } else if (sourceShot && id === (sourceShot.machineId || '__historical__')) {
+      setMachine(sourceShot.machine ?? '');
     }
   };
 
@@ -496,8 +544,8 @@ export const ShotForm: React.FC<ShotFormProps> = ({
     const b = baskets.find((item) => item.id === id);
     if (b) {
       setBasket(b.name);
-    } else if (editingShot && id === (editingShot.basketId || '__historical__')) {
-      setBasket(editingShot.basket);
+    } else if (sourceShot && id === (sourceShot.basketId || '__historical__')) {
+      setBasket(sourceShot.basket ?? '');
     }
   };
 
@@ -511,8 +559,8 @@ export const ShotForm: React.FC<ShotFormProps> = ({
     const w = waterRecipes.find((item) => item.id === id);
     if (w) {
       setWaterRecipeName(w.name);
-    } else if (editingShot && id === (editingShot.waterRecipeId || '__historical__')) {
-      setWaterRecipeName(editingShot.waterRecipeName ?? '');
+    } else if (sourceShot && id === (sourceShot.waterRecipeId || '__historical__')) {
+      setWaterRecipeName(sourceShot.waterRecipeName ?? '');
     }
   };
 
@@ -677,9 +725,12 @@ export const ShotForm: React.FC<ShotFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const resolvedBeanId = selectedBeanId || currentBean?.id || editingShot?.beanId || '';
-    const resolvedBeanName = beanName.trim() || currentBean?.name || editingShot?.beanName || 'Unknown Bean';
-    const resolvedRoaster = roaster.trim() || currentBean?.roaster || editingShot?.roaster || 'Unknown Roaster';
+    const resolvedBeanId =
+      selectedBeanId && selectedBeanId !== '__historical__'
+        ? selectedBeanId
+        : currentBean?.id || sourceShot?.beanId || '';
+    const resolvedBeanName = beanName.trim() || currentBean?.name || sourceShot?.beanName || 'Unknown Bean';
+    const resolvedRoaster = roaster.trim() || currentBean?.roaster || sourceShot?.roaster || 'Unknown Roaster';
     if (!resolvedBeanId && !resolvedBeanName) return;
 
     const finalTimestamp = isEditMode
@@ -745,26 +796,43 @@ export const ShotForm: React.FC<ShotFormProps> = ({
   };
 
   const hasHistoricalBean = Boolean(
-    editingShot && editingShot.beanId && !beans.some((b) => b.id === editingShot.beanId)
+    sourceShot &&
+      sourceShot.beanName &&
+      !beans.some(
+        (b) =>
+          b.id === sourceShot.beanId ||
+          (b.name === sourceShot.beanName && (!sourceShot.roaster || b.roaster === sourceShot.roaster)) ||
+          b.name === sourceShot.beanName
+      )
   );
   const hasHistoricalGrinder = Boolean(
-    editingShot && (!editingShot.grinderId || !grinders.some((g) => g.id === editingShot.grinderId))
+    sourceShot &&
+      (sourceShot.grinder || sourceShot.grinderId) &&
+      !grinders.some(
+        (g) => g.id === sourceShot.grinderId || (sourceShot.grinder && g.name === sourceShot.grinder)
+      )
   );
   const hasHistoricalMachine = Boolean(
-    editingShot &&
-      editingShot.machine &&
-      !machines.some((m) => m.id === editingShot.machineId || m.name === editingShot.machine)
+    sourceShot &&
+      sourceShot.machineId &&
+      sourceShot.machine &&
+      !machines.some((m) => m.id === sourceShot.machineId || m.name === sourceShot.machine)
   );
   const hasHistoricalBasket = Boolean(
-    editingShot &&
-      editingShot.basket &&
-      !baskets.some((b) => b.id === editingShot.basketId || b.name === editingShot.basket)
+    sourceShot &&
+      sourceShot.basketId &&
+      sourceShot.basket &&
+      !baskets.some((b) => b.id === sourceShot.basketId || b.name === sourceShot.basket)
   );
   const hasHistoricalWaterRecipe = Boolean(
-    editingShot &&
-      editingShot.waterRecipeName &&
+    sourceShot &&
+      sourceShot.waterRecipeId &&
+      sourceShot.waterRecipeId !== '__none__' &&
+      sourceShot.waterRecipeId !== '__custom__' &&
+      sourceShot.waterRecipeId !== '__historical__' &&
+      sourceShot.waterRecipeName &&
       !waterRecipes.some(
-        (w) => w.id === editingShot.waterRecipeId || w.name === editingShot.waterRecipeName
+        (w) => w.id === sourceShot.waterRecipeId || w.name === sourceShot.waterRecipeName
       )
   );
 
@@ -863,9 +931,9 @@ export const ShotForm: React.FC<ShotFormProps> = ({
                   onChange={(e) => handleBeanSelect(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-amber-500 transition-colors"
                 >
-                  {hasHistoricalBean && editingShot && (
-                    <option value={editingShot.beanId}>
-                      {editingShot.beanName} — {editingShot.roaster} (Removed Bag)
+                  {hasHistoricalBean && sourceShot && (
+                    <option value={sourceShot.beanId || '__historical__'}>
+                      {sourceShot.beanName} — {sourceShot.roaster} (Removed Bag)
                     </option>
                   )}
                   {beans.map((b) => (
@@ -1232,13 +1300,13 @@ export const ShotForm: React.FC<ShotFormProps> = ({
               Active Grinder Profile
             </label>
             <select
-              value={hasHistoricalGrinder && !matchedGrinder ? (editingShot?.grinderId || '__historical__') : selectedGrinderId}
+              value={hasHistoricalGrinder && !matchedGrinder ? (sourceShot?.grinderId || '__historical__') : selectedGrinderId}
               onChange={(e) => handleGrinderSelect(e.target.value)}
               className="w-full bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-amber-500 transition-colors"
             >
-              {hasHistoricalGrinder && editingShot && (
-                <option value={editingShot.grinderId || '__historical__'}>
-                  {editingShot.grinder} — Recorded on shot
+              {hasHistoricalGrinder && sourceShot && (
+                <option value={sourceShot.grinderId || '__historical__'}>
+                  {sourceShot.grinder} — Recorded on shot
                 </option>
               )}
               {grinders.map((g) => (
@@ -1520,16 +1588,16 @@ export const ShotForm: React.FC<ShotFormProps> = ({
                     : selectedWaterRecipeId === '__none__'
                     ? '__none__'
                     : hasHistoricalWaterRecipe && !matchedWaterRecipe
-                    ? editingShot?.waterRecipeId || '__historical__'
+                    ? sourceShot?.waterRecipeId || '__historical__'
                     : matchedWaterRecipe?.id || '__none__'
                 }
                 onChange={(e) => handleWaterRecipeSelect(e.target.value)}
                 aria-label="Water Recipe"
                 className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-400"
               >
-                {hasHistoricalWaterRecipe && editingShot && (
-                  <option value={editingShot.waterRecipeId || '__historical__'}>
-                    {editingShot.waterRecipeName} (Recorded on shot)
+                {hasHistoricalWaterRecipe && sourceShot && (
+                  <option value={sourceShot.waterRecipeId || '__historical__'}>
+                    {sourceShot.waterRecipeName} (Recorded on shot)
                   </option>
                 )}
                 <option value="__none__">Not specified</option>
@@ -1609,15 +1677,15 @@ export const ShotForm: React.FC<ShotFormProps> = ({
                       selectedMachineId === '__custom__'
                         ? '__custom__'
                         : hasHistoricalMachine && !matchedMachine
-                        ? editingShot?.machineId || '__historical__'
+                        ? sourceShot?.machineId || '__historical__'
                         : matchedMachine?.id || '__custom__'
                     }
                     onChange={(e) => handleMachineSelect(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
                   >
-                    {hasHistoricalMachine && editingShot && (
-                      <option value={editingShot.machineId || '__historical__'}>
-                        {editingShot.machine} (Recorded on shot)
+                    {hasHistoricalMachine && sourceShot && (
+                      <option value={sourceShot.machineId || '__historical__'}>
+                        {sourceShot.machine} (Recorded on shot)
                       </option>
                     )}
                     {machines.map((m) => (
@@ -1675,15 +1743,15 @@ export const ShotForm: React.FC<ShotFormProps> = ({
                       selectedBasketId === '__custom__'
                         ? '__custom__'
                         : hasHistoricalBasket && !matchedBasket
-                        ? editingShot?.basketId || '__historical__'
+                        ? sourceShot?.basketId || '__historical__'
                         : matchedBasket?.id || '__custom__'
                     }
                     onChange={(e) => handleBasketSelect(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
                   >
-                    {hasHistoricalBasket && editingShot && (
-                      <option value={editingShot.basketId || '__historical__'}>
-                        {editingShot.basket} (Recorded on shot)
+                    {hasHistoricalBasket && sourceShot && (
+                      <option value={sourceShot.basketId || '__historical__'}>
+                        {sourceShot.basket} (Recorded on shot)
                       </option>
                     )}
                     {baskets.map((b) => (
